@@ -35,6 +35,6 @@ object JieBa {
     //    df_seg.show(50);
     val JiebaUtils = new Utils();
     val df_seg_utils = JiebaUtils.jieba_seg(df, "sentence")
-    df_seg_utils.show(20);
+    df_seg_utils.show(20)
   }
 }
