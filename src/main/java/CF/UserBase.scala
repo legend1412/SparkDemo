@@ -94,6 +94,31 @@ object UserBase {
 
     // 1.1 倒排表 item->users
 
-    val df_v = df.selectExpr("user_id as user_v","item_id","rating_v" )
+    val df_v = df.selectExpr("user_id as user_v","item_id","rating as rating_v")
+    /**
+     * +------+-------+--------+
+     * |user_v|item_id|rating_v|
+     * +------+-------+--------+
+     * |   196|    242|       3|
+     * |   186|    302|       3|
+     * |    22|    377|       1|
+     * |   244|     51|       2|
+     * |   166|    346|       1|
+     * +------+-------+--------+
+     */
+    val df_decare = df.join(df_v,"item_id").filter("cast(user_id as long)<cast(user_v as long)")
+    df_decare.show()
+    /**
+     * +-------+-------+------+------+--------+
+     * |item_id|user_id|rating|user_v|rating_v|
+     * +-------+-------+------+------+--------+
+     * |    242|    196|     3|   721|       3|
+     * |    242|    196|     3|   720|       4|
+     * |    242|    196|     3|   500|       3|
+     * |    242|    196|     3|   845|       4|
+     * |    242|    196|     3|   305|       5|
+     * +-------+-------+------+------+--------+
+     */
+
   }
 }
