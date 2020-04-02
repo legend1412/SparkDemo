@@ -1,11 +1,14 @@
 package CF
 
 import breeze.numerics.{pow, sqrt}
+import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.functions.sum
+import org.apache.spark.sql.functions._
 
 object UserBase {
   def main(args: Array[String]): Unit = {
+    Logger.getLogger("org.apache.spark").setLevel(Level.ERROR)
+
     System.setProperty("HADOOP_USER_NAME", "root")
     val warehouse = "hdfs://master:9000/usr/soft/apache-hive-1.2.2-bin/warehouse"
 
@@ -136,7 +139,7 @@ object UserBase {
      */
 
     //相同的两个用户会有在不同item上的打分,其实就是两个用户在item上的交集
-    df_product.filter("user_id='196' and user_v='721'").show()
+    // df_product.filter("user_id='196' and user_v='721'").show()
 
     /**
      * +-------+------+----+
@@ -165,9 +168,10 @@ object UserBase {
      * +-------+------+----------+
      */
 
+    //user_v的分母
     val userScoreSum_v = userScoreSum.selectExpr("user_id as user_v", "sqrt_rating as sqrt_rating_v")
-
-    val df_sim = df_sim_group.join(userScoreSum,"user_id").join(userScoreSum_v,"user_v")
+    //带入user_id的分母和user_v的分母
+    val df_sim = df_sim_group.join(userScoreSum, "user_id").join(userScoreSum_v, "user_v")
 
     /**
      * +------+-------+----------+--------------+------------------+------------------+
@@ -180,8 +184,9 @@ object UserBase {
      * |   807|    305|     843.0|        2839.0| 53.28226721902888| 56.83308895353129|
      * +------+-------+----------+--------------+------------------+------------------+
      */
-    val df_cosine = df_sim.selectExpr("user_id","user_v","rating_dot/(sqrt_rating*sqrt_rating_v) as cosine_sim")
-    df_cosine.show()
+    //进行cosine计算
+    val df_cosine = df_sim.selectExpr("user_id", "user_v", "rating_dot/(sqrt_rating*sqrt_rating_v) as cosine_sim")
+    //    df_cosine.show()
 
     /**
      * +-------+------+--------------------+
@@ -194,5 +199,98 @@ object UserBase {
      * |    305|   807| 0.27838358105878475|
      * +-------+------+--------------------+
      */
+    //2.获取相似用户的物品集合
+    //2.1 取前n个相似用户
+    val df_nsim = df_cosine.rdd.map(x => (x(0).toString, (x(1).toString, x(2).toString)))
+      .groupByKey()
+      .mapValues(_.toArray.sortWith((x, y) => x._2.toDouble > y._2.toDouble).slice(0, 5))
+      .flatMapValues(x => x)
+      .toDF("user_id", "user_v_sim")
+
+    //    df_nsim.show()
+
+    /**
+     * +-------+--------------------+
+     * |user_id|          user_v_sim|
+     * +-------+--------------------+
+     * |    385|[308, 0.499661174...|
+     * |    385|[833, 0.494909936...|
+     * |    385|[561, 0.489420469...|
+     * |    385|[747, 0.489143717...|
+     * |    385|[269, 0.486101128...|
+     * +-------+--------------------+
+     */
+    val df_nsim_r = df_nsim.selectExpr("user_id", "user_v_sim._1 as user_v", "user_v_sim._2 as sim")
+    //    df_nsim_r.show()
+
+    /**
+     * +-------+------+-------------------+
+     * |user_id|user_v|                sim|
+     * +-------+------+-------------------+
+     * |    385|   308|0.49966117411717703|
+     * |    385|   833|0.49490993620255647|
+     * |    385|   561| 0.4894204693024517|
+     * |    385|   747|0.48914371760013464|
+     * |    385|   269| 0.4861011288308306|
+     * +-------+------+-------------------+
+     */
+    //2.2  获取用户的物品集合进行过滤
+    //获取user_id物品集合（同样能把user_v的物品集合取到） df user_id,item_id rating
+    val df_user_item = df.rdd.map(x => (x(0).toString, x(1).toString + "_" + x(2).toString))
+      .groupByKey().mapValues(_.toArray).toDF("user_id", "item_rating_arr")
+    //    df_user_item.show()
+
+    /**
+     * +-------+--------------------+
+     * |user_id|     item_rating_arr|
+     * +-------+--------------------+
+     * |    273|[328_3, 345_3, 31...|
+     * |    528|[485_2, 239_5, 58...|
+     * |    584|[114_4, 258_4, 17...|
+     * |    736|[181_2, 296_4, 53...|
+     * +-------+--------------------+
+     */
+    //列需要看全，不带省略号
+    //    df_user_item.show(1, false)
+    /**
+     * +------+----------------------------------------------------------------------------------------------------------------------------------------------------------+
+     * |user_v|item_rating_arr_v                                                                                                                                         |
+     * +------+----------------------------------------------------------------------------------------------------------------------------------------------------------+
+     * |273   |[328_3, 345_3, 311_4, 902_5, 900_3, 690_4, 319_4, 321_4, 303_4, 305_4, 315_4, 316_4, 340_3, 272_4, 347_4, 313_3, 304_3, 307_2, 286_3, 268_5, 896_4, 338_3]|
+     * +------+----------------------------------------------------------------------------------------------------------------------------------------------------------+
+     */
+    //标识user_v对于user_id的列名区别
+    val df_user_item_v = df_user_item.selectExpr("user_id as user_v", "item_rating_arr as item_rating_arr_v")
+
+    //    df_user_item_v.show()
+    /**
+     * +------+--------------------+
+     * |user_v|   item_rating_arr_v|
+     * +------+--------------------+
+     * |   273|[328_3, 345_3, 31...|
+     * |   528|[485_2, 239_5, 58...|
+     * |   584|[114_4, 258_4, 17...|
+     * |   736|[181_2, 296_4, 53...|
+     * |   456|[175_3, 715_3, 94...|
+     * +------+--------------------+
+     */
+
+    //将user_id的物品集合关联进来，同时关联相似用户user_v的物品集合
+
+    val df_get_item = df_nsim_r.join(df_user_item, "user_id").join(df_user_item_v, "user_v")
+    df_get_item.show()
+
+    /**
+     * +------+-------+-------------------+--------------------+--------------------+
+     * |user_v|user_id|                sim|     item_rating_arr|   item_rating_arr_v|
+     * +------+-------+-------------------+--------------------+--------------------+
+     * |   296|     71|0.33828954632615976|[89_5, 134_3, 346...|[705_5, 508_5, 20...|
+     * |   296|    753| 0.3968472894511972|[673_1, 79_4, 898...|[705_5, 508_5, 20...|
+     * |   296|    376|0.32635213497817583|[237_3, 269_5, 28...|[705_5, 508_5, 20...|
+     * |   296|    360| 0.4425631904462532|[334_4, 116_3, 23...|[705_5, 508_5, 20...|
+     * |   296|    392| 0.3704196358220336|[178_5, 333_4, 30...|[705_5, 508_5, 20...|
+     * +------+-------+-------------------+--------------------+--------------------+
+     */
+
   }
 }
