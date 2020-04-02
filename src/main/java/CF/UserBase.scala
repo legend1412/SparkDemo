@@ -340,7 +340,8 @@ object UserBase {
     val itemSimRating = df_filter_item.withColumn("item_prod",
       simrating_udf(col("sim"), col("filtered_item")))
       .select("user_id", "item_prod")
-    itemSimRating.show()
+
+//    itemSimRating.show()
 
     /**
      * +-------+--------------------+
