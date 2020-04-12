@@ -18,7 +18,8 @@ object UserBase {
       .appName("User Base")
       .enableHiveSupport()
       .getOrCreate()
-
+    val scoreStrage = "sum"
+    val ITEMNUM=50
     val df = spark.sql("select user_id,item_id,rating from badou.udata")
     /**
      * +-------+-------+------+
@@ -341,7 +342,7 @@ object UserBase {
       simrating_udf(col("sim"), col("filtered_item")))
       .select("user_id", "item_prod")
 
-//    itemSimRating.show()
+    //    itemSimRating.show()
 
     /**
      * +-------+--------------------+
@@ -355,7 +356,50 @@ object UserBase {
      * +-------+--------------------+
      */
     //将item和打分从item_prod数组里面打平取出来
+    val userItemScore = itemSimRating.select(itemSimRating("user_id"),
+      explode(itemSimRating("item_prod")))
+      .toDF("user_id", "item_prod")
+      .selectExpr("user_id", "split(item_prod,'_')[0] as item_id",
+        "cast(split(item_prod,'_')[1] as double) as score")
+    //userItemScore.show()
+    /**
+     * +-------+-------+------------------+
+     * |user_id|item_id|             score|
+     * +-------+-------+------------------+
+     * |     71|    705|1.6914477316307988|
+     * |     71|    508|1.6914477316307988|
+     * |     71|     20|1.6914477316307988|
+     * |     71|    228| 1.353158185304639|
+     * |     71|    855|1.6914477316307988|
+     * +-------+-------+------------------+
+     * only showing top 20 rows
+     *
+     *
+     * Process finished with exit code 0
+     */
     //同一个用户通过不同的相似用户产生相同的item，对应不一样的打分，sum求和重复的item分值
+    val userItemScoreSum = userItemScore.groupBy("user_id", "item_id")
+      .agg("score" -> scoreStrage) //sum,avg,max,min
+      .withColumnRenamed(s"$scoreStrage(score)","last_score")
     //推荐最后的结果 50
+    val df_rec = userItemScoreSum.rdd.map(x=>(x(0).toString,(x(1).toString,x(2).toString)))
+      .groupByKey()
+      .mapValues(_.toArray.sortBy(_._2).reverse.slice(0,ITEMNUM))
+      .flatMapValues(x=>x).toDF("user_id","item_sim")
+      .selectExpr("user_id","item_sim._1 as item_id","item_sim._2 as score")
+    df_rec.show()
+
+    /**
+     * +-------+-------+------------------+
+     * |user_id|item_id|             score|
+     * +-------+-------+------------------+
+     * |    385|    475| 9.827860145138558|
+     * |    385|    154| 9.356610793984192|
+     * |    385|      7| 9.345355108481666|
+     * |    385|     64| 9.341759016307728|
+     * |    385|    223| 8.381684906489413|
+     * |    385|    202| 8.375322977248489|
+     * +-------+-------+------------------+
+     */
   }
 }
