@@ -54,7 +54,7 @@ object Feature {
 
     //5.每个用户平均每个订单多少商品
     //1)先求每个订单多少商品
-    val ordProdCnt = priors.groupBy("order_id").count().withColumnRenamed("count","u_ord_cnt")
+    val ordProdCnt = priors.groupBy("order_id").count()//.withColumnRenamed("count","u_ord_cnt")
     //2）求每个用户订单商品数量的平均值
     val userPerOrdProdCnt = orders.join(ordProdCnt, "order_id")
       .groupBy("user_id")
@@ -94,6 +94,6 @@ object Feature {
     //4.用户对应product在所有这个用户购买产品量中的占比rate
     val rate = xFeat.selectExpr("user_id", "product_id",
       "concat(round(100*orders_cnt/max_ord_num),'%') as user_prod_rate")
-    (prodRodCnt,userFeat)
+    (userFeat,prodRodCnt)
   }
 }

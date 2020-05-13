@@ -27,14 +27,17 @@ object LRTest {
     val orders = spark.sql("select * from badou.orders")
     val trains = spark.sql("select * from badou.trains")
 
-    priors.show()
-    orders.show()
+//    priors.show()
+//    orders.show()
 
     //2、获取生成的特征
     val op = orders.join(priors,"order_id").persist(StorageLevel.MEMORY_AND_DISK)
     val (userFeat,prodFeat) = GenerateFeature(priors,orders)
+//    userFeat.show()
+//    prodFeat.show()
 
     val opTrain=orders.join(trains,"order_id")
+//    opTrain.show()
     //train的数据标签为1
     val user_real = opTrain.select("product_id","user_id").distinct().withColumn("label",lit(1))
     //priors表中的标签为0，train中的标签为1，合并在一起
@@ -48,9 +51,9 @@ object LRTest {
       .setFeaturesCol("features").setLabelCol("label")
     //formula的数据转换
     val df = rformula.fit(train).transform(train).select("features","label")
-    df.show()
+//    df.show()
 //#######################################LR model########################################################
-    //实例化LR模型，setElasticNetParam 0:L2,1:L1 通过正则解决过拟合问题 0~1之间是L1和L2正则的组合
+    //实例化LR模型，setElasticNetParam 0:L2,1:L1 通过正则解决过拟合问题 0~1之间是L1和L2正则的组合 值越大模型越简单，越不容易过拟合
     val lr = new LogisticRegression().setMaxIter(10).setRegParam(0) //具体参数值
     //将训练集70%作为训练，30%作为test
     val Array(trainingData,testData)=df.randomSplit(Array(0.7,0.3))
