@@ -53,7 +53,7 @@ object LRTest {
     val df = rformula.fit(train).transform(train).select("features","label")
 //    df.show()
 //#######################################LR model########################################################
-    //实例化LR模型，setElasticNetParam 0:L2,1:L1 通过正则解决过拟合问题 0~1之间是L1和L2正则的组合 值越大模型越简单，越不容易过拟合
+    //实例化LR模型，setElasticNetParam 0:L2,1:L1 通过正则解决过拟合问题 0~1之间是L1和L2正则的组合
     val lr = new LogisticRegression().setMaxIter(10).setRegParam(0) //具体参数值
     //将训练集70%作为训练，30%作为test
     val Array(trainingData,testData)=df.randomSplit(Array(0.7,0.3))
