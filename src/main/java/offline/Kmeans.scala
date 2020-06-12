@@ -10,6 +10,7 @@ import org.apache.spark.sql.functions.{col, udf}
 
 object Kmeans {
   def main(args: Array[String]): Unit = {
+    System.setProperty("HADOOP_USER_NAME","root")
     //定义结巴分词的序列化
     val conf = new SparkConf()
       .registerKryoClasses(Array(classOf[JiebaSegmenter]))
@@ -29,7 +30,7 @@ object Kmeans {
       val seg = spark.sparkContext.broadcast(segmenter)
       val jieba_udf = udf { sentence: String =>
         val segV = seg.value
-        segV.process(sentence.toString, SegMode.INDEX)
+        segV.process(sentence, SegMode.INDEX)
           .toArray().map(_.asInstanceOf[SegToken].word)
           .filter(_.length > 1)
         //        .mkString(" ")
